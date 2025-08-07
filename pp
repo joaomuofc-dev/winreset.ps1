@@ -8,7 +8,7 @@
 # Funciona: 100% PowerShell nativo, sem dependencias externas
 # ===============================================================================
 
-# Sistema de segurança e auditoria
+# Sistema de seguranÃ§a e auditoria
 function Sistema-Seguranca {
     param(
         [string]$Acao,
@@ -19,24 +19,24 @@ function Sistema-Seguranca {
     $logSeguranca = "$env:USERPROFILE\WinReset_Security_$(Get-Date -Format 'yyyyMM').log"
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     
-    # Verificar permissões
+    # Verificar permissÃµes
     if (-not (Verificar-Permissoes -Acao $Acao)) {
-        $entrada = "[$timestamp] [NEGADO] Usuário: $Usuario | Ação: $Acao | IP: $IP | Motivo: Sem permissão"
+        $entrada = "[$timestamp] [NEGADO] UsuÃ¡rio: $Usuario | AÃ§Ã£o: $Acao | IP: $IP | Motivo: Sem permissÃ£o"
         Add-Content -Path $logSeguranca -Value $entrada
-        Show-Text "❌ Acesso negado para a ação: $Acao" Red
+        Show-Text "âŒ Acesso negado para a aÃ§Ã£o: $Acao" Red
         return $false
     }
     
-    # Log da ação autorizada
-    $entrada = "[$timestamp] [AUTORIZADO] Usuário: $Usuario | Ação: $Acao | IP: $IP"
+    # Log da aÃ§Ã£o autorizada
+    $entrada = "[$timestamp] [AUTORIZADO] UsuÃ¡rio: $Usuario | AÃ§Ã£o: $Acao | IP: $IP"
     Add-Content -Path $logSeguranca -Value $entrada
     
-    # Verificar se é ação crítica
+    # Verificar se Ã© aÃ§Ã£o crÃ­tica
     $acoesCriticas = @("Reset-Total", "Formatacao", "Configuracao-Rede")
     if ($Acao -in $acoesCriticas) {
-        Show-Text "⚠️  AÇÃO CRÍTICA DETECTADA: $Acao" Yellow
+        Show-Text "âš ï¸  AÃ‡ÃƒO CRÃTICA DETECTADA: $Acao" Yellow
         if (-not (Confirmar-AcaoCritica -Acao $Acao -IP $IP)) {
-            $entrada = "[$timestamp] [CANCELADO] Usuário: $Usuario | Ação: $Acao | IP: $IP | Motivo: Cancelado pelo usuário"
+            $entrada = "[$timestamp] [CANCELADO] UsuÃ¡rio: $Usuario | AÃ§Ã£o: $Acao | IP: $IP | Motivo: Cancelado pelo usuÃ¡rio"
             Add-Content -Path $logSeguranca -Value $entrada
             return $false
         }
@@ -45,11 +45,11 @@ function Sistema-Seguranca {
     return $true
 }
 
-# Verificação de permissões
+# VerificaÃ§Ã£o de permissÃµes
 function Verificar-Permissoes {
     param([string]$Acao)
     
-    # Verificar se é administrador
+    # Verificar se Ã© administrador
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
     
     $acoesAdminObrigatorio = @("Reset-Total", "Configuracao-Sistema", "Backup-Restauracao")
@@ -61,29 +61,29 @@ function Verificar-Permissoes {
     return $true
 }
 
-# Confirmação para ações críticas
+# ConfirmaÃ§Ã£o para aÃ§Ãµes crÃ­ticas
 function Confirmar-AcaoCritica {
     param(
         [string]$Acao,
         [string]$IP
     )
     
-    Show-Text "🔐 CONFIRMAÇÃO DE SEGURANÇA" Red
-    Show-Text "Ação: $Acao" Yellow
+    Show-Text "ðŸ” CONFIRMAÃ‡ÃƒO DE SEGURANÃ‡A" Red
+    Show-Text "AÃ§Ã£o: $Acao" Yellow
     Show-Text "Alvo: $IP" Yellow
-    Show-Text "Esta é uma ação irreversível que pode afetar o funcionamento da impressora." Red
+    Show-Text "Esta Ã© uma aÃ§Ã£o irreversÃ­vel que pode afetar o funcionamento da impressora." Red
     
     $codigo = Get-Random -Minimum 1000 -Maximum 9999
-    Show-Text "Digite o código de confirmação: $codigo" Cyan
+    Show-Text "Digite o cÃ³digo de confirmaÃ§Ã£o: $codigo" Cyan
     
-    $entrada = Read-Host "Código"
+    $entrada = Read-Host "CÃ³digo"
     
     if ($entrada -eq $codigo.ToString()) {
-        Show-Text "✅ Confirmação aceita" Green
+        Show-Text "âœ… ConfirmaÃ§Ã£o aceita" Green
         return $true
     }
     else {
-        Show-Text "❌ Código incorreto. Ação cancelada." Red
+        Show-Text "âŒ CÃ³digo incorreto. AÃ§Ã£o cancelada." Red
         return $false
     }
 }
@@ -242,6 +242,9 @@ function Menu-WinReset {
         Show-Text "[13] Configuracoes"
         
         Separator
+        Show-Text "[15] Dashboard tempo real" Cyan
+        Show-Text "[16] AutomaÃ§Ã£o inteligente" Cyan
+        Show-Text "[17] Interface grÃ¡fica" Magenta
         Show-Text "[0] Sair" Red
         Separator
         
@@ -314,6 +317,31 @@ function Menu-WinReset {
                 Clear-Host
                 Menu-Configuracoes
                 Pause
+            }
+            "15" { 
+                Clear-Host
+                $impressoras = IA-DeteccaoInteligente
+                if ($impressoras.Count -gt 0) {
+                    Dashboard-TempoReal -ImpressorasMonitoradas $impressoras
+                }
+                else {
+                    Show-Text "Nenhuma impressora detectada para monitoramento" Yellow
+                }
+                Pause
+            }
+            "16" { 
+                Clear-Host
+                $impressoras = IA-DeteccaoInteligente
+                if ($impressoras.Count -gt 0) {
+                    Automacao-Inteligente -ImpressorasMonitoradas $impressoras
+                }
+                else {
+                    Show-Text "Nenhuma impressora detectada para automaÃ§Ã£o" Yellow
+                }
+                Pause
+            }
+            "17" { 
+                Interface-Grafica
             }
             "0" { 
                 Clear-Host
@@ -542,9 +570,6 @@ function Menu-Configuracoes {
     }
 }
 
-# Executar o menu principal
-Menu-WinReset
-
 
 function Reset-ImpressoraReal {
     param([hashtable]$PrinterInfo)
@@ -584,16 +609,6 @@ function Reset-ImpressoraReal {
     
     return $success
 }
-
-# No switch do menu principal, adicionar:
-            "14" { 
-                Clear-Host
-                Menu-Controle-Total
-                Pause
-            }
-
-# E na exibição do menu:
-        Show-Text "[14] Controle total de impressora na rede" Magenta
 
 # Funcao para controle total de impressoras na rede
 function Controle-Total-Impressora {
@@ -968,16 +983,16 @@ function Reset-Universal-Rede {
     }
 }
 
-# 🚀 Melhorias Avançadas para WinReset v3.0
+# ðŸš€ Melhorias AvanÃ§adas para WinReset v3.0
 
-# Sistema de automação inteligente
+# Sistema de automaÃ§Ã£o inteligente
 function Automacao-Inteligente {
     param(
         [array]$ImpressorasMonitoradas,
         [switch]$ModoAutomatico
     )
     
-    Show-Text "🤖 Iniciando sistema de automação inteligente..." Magenta
+    Show-Text "ðŸ¤– Iniciando sistema de automaÃ§Ã£o inteligente..." Magenta
     
     $regrasAutomacao = @(
         @{
@@ -987,13 +1002,13 @@ function Automacao-Inteligente {
             Ativo = $true
         },
         @{
-            Nome = "Notificação Tinta Baixa"
+            Nome = "NotificaÃ§Ã£o Tinta Baixa"
             Condicao = { param($status) $status.TintaBaixa }
             Acao = { param($ip) Notificar-TintaBaixa -IP $ip }
             Ativo = $true
         },
         @{
-            Nome = "Reconexão Automática"
+            Nome = "ReconexÃ£o AutomÃ¡tica"
             Condicao = { param($status) $status.Status -eq "Offline" }
             Acao = { param($ip) Tentar-Reconexao -IP $ip }
             Ativo = $true
@@ -1006,12 +1021,12 @@ function Automacao-Inteligente {
             
             foreach ($regra in $regrasAutomacao) {
                 if ($regra.Ativo -and (& $regra.Condicao $status)) {
-                    Show-Text "🔧 Executando automação: $($regra.Nome) para $($impressora.IP)" Yellow
+                    Show-Text "ðŸ”§ Executando automaÃ§Ã£o: $($regra.Nome) para $($impressora.IP)" Yellow
                     
                     if ($ModoAutomatico -or (Confirmar-Automacao -Regra $regra.Nome -IP $impressora.IP)) {
                         & $regra.Acao $impressora.IP
                         
-                        # Log da automação
+                        # Log da automaÃ§Ã£o
                         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                         $logEntry = "[$timestamp] [AUTOMACAO] $($regra.Nome) executada em $($impressora.IP)"
                         Add-Content -Path $global:logFile -Value $logEntry
@@ -1026,29 +1041,29 @@ function Automacao-Inteligente {
         if ([Console]::KeyAvailable) {
             $key = [Console]::ReadKey($true)
             if ($key.KeyChar -eq 'q' -or $key.KeyChar -eq 'Q') {
-                Show-Text "Automação interrompida pelo usuário" Yellow
+                Show-Text "AutomaÃ§Ã£o interrompida pelo usuÃ¡rio" Yellow
                 break
             }
         }
     }
 }
 
-# Reset automático de papel preso
+# Reset automÃ¡tico de papel preso
 function Reset-PapelPreso-Automatico {
     param([string]$IP)
     
-    Show-Text "🔧 Executando reset automático de papel preso em $IP..." Cyan
+    Show-Text "ðŸ”§ Executando reset automÃ¡tico de papel preso em $IP..." Cyan
     
     try {
         $tcpClient = New-Object System.Net.Sockets.TcpClient
         $tcpClient.Connect($IP, 9100)
         $stream = $tcpClient.GetStream()
         
-        # Sequência específica para papel preso
+        # SequÃªncia especÃ­fica para papel preso
         $comandos = @(
             "`e%-12345X@PJL SET CLEARJAM=ON`r`n`e%-12345X`r`n",
             "`e%-12345X@PJL SET AUTOCONT=ON`r`n`e%-12345X`r`n",
-            "`e@",  # Reset básico
+            "`e@",  # Reset bÃ¡sico
             "`e%-12345X@PJL RESET`r`n`e%-12345X`r`n"
         )
         
@@ -1059,45 +1074,45 @@ function Reset-PapelPreso-Automatico {
         }
         
         $tcpClient.Close()
-        Show-Text "✅ Reset automático de papel preso concluído" Green
+        Show-Text "âœ… Reset automÃ¡tico de papel preso concluÃ­do" Green
         
         # Verificar se resolveu
         Start-Sleep -Seconds 5
         $novoStatus = Monitorar-StatusRapido -IP $IP
         if (-not $novoStatus.PapelPreso) {
-            Show-Text "🎉 Problema de papel preso resolvido automaticamente!" Green
+            Show-Text "ðŸŽ‰ Problema de papel preso resolvido automaticamente!" Green
         }
         else {
-            Show-Text "⚠️  Problema persiste. Intervenção manual necessária." Yellow
+            Show-Text "âš ï¸  Problema persiste. IntervenÃ§Ã£o manual necessÃ¡ria." Yellow
         }
     }
     catch {
-        Show-Text "❌ Erro no reset automático: $_" Red
+        Show-Text "âŒ Erro no reset automÃ¡tico: $_" Red
     }
 }
 
-# Confirmação para automação
+# ConfirmaÃ§Ã£o para automaÃ§Ã£o
 function Confirmar-Automacao {
     param(
         [string]$Regra,
         [string]$IP
     )
     
-    Show-Text "🤖 Automação detectada: $Regra" Yellow
+    Show-Text "ðŸ¤– AutomaÃ§Ã£o detectada: $Regra" Yellow
     Show-Text "Alvo: $IP" Yellow
     $resposta = Read-Host "Executar automaticamente? (S/N)"
     
     return ($resposta -eq 'S' -or $resposta -eq 's' -or $resposta -eq 'Y' -or $resposta -eq 'y')
 }
 
-# 🤖 1. Sistema de IA para Detecção Automática
+# ðŸ¤– 1. Sistema de IA para DetecÃ§Ã£o AutomÃ¡tica
 function IA-DeteccaoInteligente {
     param(
         [string]$NetworkRange = "192.168.1",
         [switch]$ScanCompleto
     )
     
-    Show-Text "🤖 Iniciando detecção inteligente com IA..." Magenta
+    Show-Text "ðŸ¤– Iniciando detecÃ§Ã£o inteligente com IA..." Magenta
     
     $impressorasDetectadas = @()
     $padroesMarcas = @{
@@ -1122,7 +1137,7 @@ function IA-DeteccaoInteligente {
             Confianca = 0
         }
         
-        # Teste de conectividade em múltiplas portas
+        # Teste de conectividade em mÃºltiplas portas
         $portasComuns = @(9100, 515, 631, 161, 80, 443, 21, 23)
         foreach ($porta in $portasComuns) {
             $teste = Test-NetConnection -ComputerName $ip -Port $porta -WarningAction SilentlyContinue -InformationLevel Quiet
@@ -1130,7 +1145,7 @@ function IA-DeteccaoInteligente {
                 $resultado.Portas += $porta
                 $resultado.Confianca += 10
                 
-                # Identificação por porta
+                # IdentificaÃ§Ã£o por porta
                 switch ($porta) {
                     9100 { $resultado.Servicos += "JetDirect" }
                     515 { $resultado.Servicos += "LPD" }
@@ -1142,7 +1157,7 @@ function IA-DeteccaoInteligente {
             }
         }
         
-        # Se encontrou serviços de impressora, fazer identificação avançada
+        # Se encontrou serviÃ§os de impressora, fazer identificaÃ§Ã£o avanÃ§ada
         if ($resultado.Portas.Count -gt 0) {
             $resultado = IA-IdentificarMarca -IP $ip -ResultadoBase $resultado -PadroesMarcas $padroesMarcas
         }
@@ -1153,7 +1168,7 @@ function IA-DeteccaoInteligente {
     return $impressorasDetectadas
 }
 
-# IA para identificação de marca e modelo
+# IA para identificaÃ§Ã£o de marca e modelo
 function IA-IdentificarMarca {
     param(
         [string]$IP,
@@ -1162,11 +1177,11 @@ function IA-IdentificarMarca {
     )
     
     try {
-        # Tentar identificação via HTTP/HTTPS
+        # Tentar identificaÃ§Ã£o via HTTP/HTTPS
         if (80 -in $ResultadoBase.Portas -or 443 -in $ResultadoBase.Portas) {
             $protocolo = if (443 -in $ResultadoBase.Portas) { "https" } else { "http" }
             try {
-                $response = Invoke-WebRequest -Uri "$protocolo://$IP" -TimeoutSec 3 -ErrorAction SilentlyContinue
+                $response = Invoke-WebRequest -Uri "${protocolo}://$IP" -TimeoutSec 3 -ErrorAction SilentlyContinue
                 $html = $response.Content
                 
                 foreach ($marca in $PadroesMarcas.Keys) {
@@ -1189,7 +1204,7 @@ function IA-IdentificarMarca {
             catch { }
         }
         
-        # Tentar identificação via JetDirect
+        # Tentar identificaÃ§Ã£o via JetDirect
         if (9100 -in $ResultadoBase.Portas -and $ResultadoBase.Marca -eq "Desconhecida") {
             try {
                 $tcpClient = New-Object System.Net.Sockets.TcpClient
@@ -1197,7 +1212,7 @@ function IA-IdentificarMarca {
                 $tcpClient.Connect($IP, 9100)
                 $stream = $tcpClient.GetStream()
                 
-                # Comando para obter informações
+                # Comando para obter informaÃ§Ãµes
                 $infoCmd = [System.Text.Encoding]::ASCII.GetBytes("`e%-12345X@PJL INFO ID`r`n`e%-12345X`r`n")
                 $stream.Write($infoCmd, 0, $infoCmd.Length)
                 
@@ -1243,12 +1258,12 @@ function Dashboard-TempoReal {
         $Host.UI.RawUI.CursorPosition = $posicaoOriginal
         Clear-Host
         
-        # Cabeçalho do dashboard
-        Show-Text "╔══════════════════════════════════════════════════════════════════════════════╗" Cyan
-        Show-Text "║                    🖨️  WINRESET DASHBOARD TEMPO REAL v3.0                    ║" Cyan
-        Show-Text "╠══════════════════════════════════════════════════════════════════════════════╣" Cyan
-        Show-Text "║ Atualização: $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss') | Pressione 'Q' para sair          ║" Yellow
-        Show-Text "╚══════════════════════════════════════════════════════════════════════════════╝" Cyan
+        # CabeÃ§alho do dashboard
+        Show-Text "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—" Cyan
+        Show-Text "â•‘                    ðŸ–¨ï¸  WINRESET DASHBOARD TEMPO REAL v3.0                    â•‘" Cyan
+        Show-Text "â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£" Cyan
+        Show-Text "â•‘ AtualizaÃ§Ã£o: $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss') | Pressione 'Q' para sair          â•‘" Yellow
+        Show-Text "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•" Cyan
         
         # Status geral
         $totalImpressoras = $ImpressorasMonitoradas.Count
@@ -1265,18 +1280,18 @@ function Dashboard-TempoReal {
             }
         }
         
-        # Exibir estatísticas
-        Show-Text "`n📊 ESTATÍSTICAS GERAIS:" Magenta
+        # Exibir estatÃ­sticas
+        Show-Text "`nðŸ“Š ESTATÃSTICAS GERAIS:" Magenta
         Show-Text "   Total de Impressoras: $totalImpressoras" White
-        Show-Text "   🟢 Online: $online" Green
-        Show-Text "   🟡 Com Problemas: $comProblemas" Yellow
-        Show-Text "   🔴 Offline: $offline" Red
+        Show-Text "   ðŸŸ¢ Online: $online" Green
+        Show-Text "   ðŸŸ¡ Com Problemas: $comProblemas" Yellow
+        Show-Text "   ðŸ”´ Offline: $offline" Red
         
         # Lista detalhada
-        Show-Text "`n🖨️  STATUS DETALHADO:" Magenta
-        Show-Text "┌─────────────────┬──────────────┬─────────────┬──────────────────────────────┐" Gray
-        Show-Text "│ IP              │ Marca        │ Status      │ Último Problema              │" Gray
-        Show-Text "├─────────────────┼──────────────┼─────────────┼──────────────────────────────┤" Gray
+        Show-Text "`nðŸ–¨ï¸  STATUS DETALHADO:" Magenta
+        Show-Text "â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”" Gray
+        Show-Text "â”‚ IP              â”‚ Marca        â”‚ Status      â”‚ Ãšltimo Problema              â”‚" Gray
+        Show-Text "â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤" Gray
         
         foreach ($impressora in $ImpressorasMonitoradas) {
             $status = Monitorar-StatusRapido -IP $impressora.IP
@@ -1292,34 +1307,34 @@ function Dashboard-TempoReal {
             $statusText = $status.Status.PadRight(11)
             $problema = ($status.UltimoProblema -replace ".{30}.*", "...").PadRight(28)
             
-            Show-Text "│ $ip │ $marca │ $statusText │ $problema │" $cor
+            Show-Text "â”‚ $ip â”‚ $marca â”‚ $statusText â”‚ $problema â”‚" $cor
         }
         
-        Show-Text "└─────────────────┴──────────────┴─────────────┴──────────────────────────────┘" Gray
+        Show-Text "â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜" Gray
         
-        # Alertas críticos
+        # Alertas crÃ­ticos
         $alertasCriticos = $ImpressorasMonitoradas | Where-Object { 
             $status = Monitorar-StatusRapido -IP $_.IP
             $status.PapelPreso -or $status.TintaBaixa -or $status.Status -eq "Offline"
         }
         
         if ($alertasCriticos.Count -gt 0) {
-            Show-Text "`n🚨 ALERTAS CRÍTICOS:" Red
+            Show-Text "`nðŸš¨ ALERTAS CRÃTICOS:" Red
             foreach ($alerta in $alertasCriticos) {
                 $status = Monitorar-StatusRapido -IP $alerta.IP
                 if ($status.PapelPreso) {
-                    Show-Text "   📄 Papel preso em $($alerta.IP) ($($alerta.Marca))" Red
+                    Show-Text "   ðŸ“„ Papel preso em $($alerta.IP) ($($alerta.Marca))" Red
                 }
                 if ($status.TintaBaixa) {
-                    Show-Text "   🖋️  Tinta baixa em $($alerta.IP) ($($alerta.Marca))" Yellow
+                    Show-Text "   ðŸ–‹ï¸  Tinta baixa em $($alerta.IP) ($($alerta.Marca))" Yellow
                 }
                 if ($status.Status -eq "Offline") {
-                    Show-Text "   🔌 Impressora offline: $($alerta.IP) ($($alerta.Marca))" Red
+                    Show-Text "   ðŸ”Œ Impressora offline: $($alerta.IP) ($($alerta.Marca))" Red
                 }
             }
         }
         
-        # Verificar se usuário quer sair
+        # Verificar se usuÃ¡rio quer sair
         if ([Console]::KeyAvailable) {
             $key = [Console]::ReadKey($true)
             if ($key.KeyChar -eq 'q' -or $key.KeyChar -eq 'Q') {
@@ -1331,7 +1346,7 @@ function Dashboard-TempoReal {
     }
 }
 
-# Monitoramento rápido de status
+# Monitoramento rÃ¡pido de status
 function Monitorar-StatusRapido {
     param([string]$IP)
     
@@ -1348,7 +1363,7 @@ function Monitorar-StatusRapido {
         if ($ping) {
             $resultado.Status = "Online"
             
-            # Verificação rápida de problemas
+            # VerificaÃ§Ã£o rÃ¡pida de problemas
             $tcpClient = New-Object System.Net.Sockets.TcpClient
             $tcpClient.ReceiveTimeout = 2000
             $tcpClient.Connect($IP, 9100)
@@ -1377,7 +1392,7 @@ function Monitorar-StatusRapido {
         }
     }
     catch {
-        $resultado.UltimoProblema = "Erro de comunicação"
+        $resultado.UltimoProblema = "Erro de comunicaÃ§Ã£o"
     }
     
     return $resultado
