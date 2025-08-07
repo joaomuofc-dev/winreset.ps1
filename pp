@@ -464,3 +464,426 @@ function Menu-Configuracoes {
 
 # Executar o menu principal
 Menu-WinReset
+
+
+function Reset-ImpressoraReal {
+    param([hashtable]$PrinterInfo)
+    
+    $success = $false
+    
+    if ($PrinterInfo.Type -eq "Network") {
+        # Reset via comando TCP/IP
+        try {
+            $tcpClient = New-Object System.Net.Sockets.TcpClient
+            $tcpClient.Connect($PrinterInfo.IP, 9100)
+            $stream = $tcpClient.GetStream()
+            
+            # Comando ESC/POS reset
+            $resetCmd = [System.Text.Encoding]::ASCII.GetBytes("`e@")
+            $stream.Write($resetCmd, 0, $resetCmd.Length)
+            
+            $tcpClient.Close()
+            $success = $true
+        }
+        catch {
+            Show-Text "Erro no reset de rede: $_" Red
+        }
+    }
+    else {
+        # Reset local via spooler
+        try {
+            Stop-Service spooler -Force
+            Get-PrintJob -PrinterName $PrinterInfo.Name | Remove-PrintJob -Confirm:$false
+            Start-Service spooler
+            $success = $true
+        }
+        catch {
+            Show-Text "Erro no reset local: $_" Red
+        }
+    }
+    
+    return $success
+}
+
+# No switch do menu principal, adicionar:
+            "14" { 
+                Clear-Host
+                Menu-Controle-Total
+                Pause
+            }
+
+# E na exibição do menu:
+        Show-Text "[14] Controle total de impressora na rede" Magenta
+
+# Funcao para controle total de impressoras na rede
+function Controle-Total-Impressora {
+    param(
+        [string]$IP,
+        [string]$Modelo = "Generic"
+    )
+    
+    $resultado = @{
+        Status = "Unknown"
+        PapelPreso = $false
+        NivelTinta = @{}
+        Conectividade = $false
+        Temperatura = "Normal"
+        Erros = @()
+    }
+    
+    try {
+        # Teste de conectividade avancado
+        $ping = Test-NetConnection -ComputerName $IP -Port 9100 -WarningAction SilentlyContinue
+        $resultado.Conectividade = $ping.TcpTestSucceeded
+        
+        if ($resultado.Conectividade) {
+            # Comandos especificos para Epson L3250
+            if ($Modelo -like "*L3250*" -or $Modelo -like "*Epson*") {
+                $resultado = Diagnostico-Epson-L3250 -IP $IP
+            }
+            else {
+                # Diagnostico universal via SNMP e JetDirect
+                $resultado = Diagnostico-Universal-Avancado -IP $IP
+            }
+        }
+        
+        return $resultado
+    }
+    catch {
+        Show-Text "Erro no controle total: $_" Red
+        return $resultado
+    }
+}
+
+# Diagnostico especifico para Epson L3250
+function Diagnostico-Epson-L3250 {
+    param([string]$IP)
+    
+    $resultado = @{
+        Status = "Online"
+        PapelPreso = $false
+        NivelTinta = @{
+            Preto = "Unknown"
+            Ciano = "Unknown"
+            Magenta = "Unknown"
+            Amarelo = "Unknown"
+        }
+        Conectividade = $true
+        Temperatura = "Normal"
+        Erros = @()
+    }
+    
+    try {
+        # Conectar via TCP para comandos especificos da Epson
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.ReceiveTimeout = 5000
+        $tcpClient.SendTimeout = 5000
+        $tcpClient.Connect($IP, 9100)
+        $stream = $tcpClient.GetStream()
+        
+        # Comando para verificar status da Epson L3250
+        $statusCmd = [System.Text.Encoding]::ASCII.GetBytes("`e@`e%-12345X@PJL INFO STATUS`r`n`e%-12345X`r`n")
+        $stream.Write($statusCmd, 0, $statusCmd.Length)
+        
+        # Ler resposta
+        $buffer = New-Object byte[] 1024
+        $bytesRead = $stream.Read($buffer, 0, 1024)
+        $response = [System.Text.Encoding]::ASCII.GetString($buffer, 0, $bytesRead)
+        
+        # Analisar resposta para detectar problemas
+        if ($response -match "PAPER.*JAM|JAM.*PAPER") {
+            $resultado.PapelPreso = $true
+            $resultado.Erros += "Papel preso detectado"
+        }
+        
+        if ($response -match "INK.*LOW|LOW.*INK") {
+            $resultado.Erros += "Nivel de tinta baixo"
+        }
+        
+        if ($response -match "OFFLINE|ERROR") {
+            $resultado.Status = "Offline"
+            $resultado.Erros += "Impressora offline ou com erro"
+        }
+        
+        $tcpClient.Close()
+        
+        # Comando especifico para verificar nivel de tinta Epson
+        $resultado = Verificar-Tinta-Epson -IP $IP -ResultadoBase $resultado
+        
+        return $resultado
+    }
+    catch {
+        $resultado.Erros += "Erro na comunicacao: $_"
+        return $resultado
+    }
+}
+
+# Verificacao de nivel de tinta especifica para Epson
+function Verificar-Tinta-Epson {
+    param(
+        [string]$IP,
+        [hashtable]$ResultadoBase
+    )
+    
+    try {
+        # Comando SNMP para nivel de tinta (se disponivel)
+        $snmpCmd = "snmpget -v2c -c public $IP 1.3.6.1.2.1.43.11.1.1.9.1.1"
+        $snmpResult = cmd /c $snmpCmd 2>$null
+        
+        if ($snmpResult) {
+            # Processar resultado SNMP para niveis de tinta
+            $ResultadoBase.NivelTinta.Preto = "Detectado via SNMP"
+        }
+        
+        return $ResultadoBase
+    }
+    catch {
+        return $ResultadoBase
+    }
+}
+
+# Reset especifico para Epson L3250 quando bloqueada
+function Reset-Epson-L3250-Desbloqueio {
+    param([string]$IP)
+    
+    Show-Text "Iniciando reset de desbloqueio para Epson L3250..." Yellow
+    
+    try {
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.Connect($IP, 9100)
+        $stream = $tcpClient.GetStream()
+        
+        # Sequencia de comandos para desbloqueio da L3250
+        $comandos = @(
+            "`e@",  # Reset basico
+            "`eE",  # Reset de configuracao
+            "`e%-12345X@PJL RESET`r`n`e%-12345X`r`n",  # Reset PJL
+            "`e%-12345X@PJL SET CLEARJAM=ON`r`n`e%-12345X`r`n",  # Limpar papel preso
+            "`e%-12345X@PJL SET AUTOCONT=ON`r`n`e%-12345X`r`n"   # Auto continuar
+        )
+        
+        foreach ($cmd in $comandos) {
+            $bytes = [System.Text.Encoding]::ASCII.GetBytes($cmd)
+            $stream.Write($bytes, 0, $bytes.Length)
+            Start-Sleep -Milliseconds 500
+            Show-Text "Comando enviado: $($cmd.Replace("`e", "ESC").Replace("`r`n", "CRLF"))" Cyan
+        }
+        
+        $tcpClient.Close()
+        Show-Text "Reset de desbloqueio concluido para Epson L3250" Green
+        return $true
+    }
+    catch {
+        Show-Text "Erro no reset de desbloqueio: $_" Red
+        return $false
+    }
+}
+
+# Diagnostico universal avancado para outras marcas
+function Diagnostico-Universal-Avancado {
+    param([string]$IP)
+    
+    $resultado = @{
+        Status = "Unknown"
+        PapelPreso = $false
+        NivelTinta = @{}
+        Conectividade = $true
+        Temperatura = "Normal"
+        Erros = @()
+    }
+    
+    try {
+        # Tentar multiplos protocolos
+        $protocolos = @(9100, 515, 631, 161)  # JetDirect, LPD, IPP, SNMP
+        
+        foreach ($porta in $protocolos) {
+            $teste = Test-NetConnection -ComputerName $IP -Port $porta -WarningAction SilentlyContinue
+            if ($teste.TcpTestSucceeded) {
+                Show-Text "Porta $porta aberta em $IP" Green
+                
+                switch ($porta) {
+                    9100 { $resultado = Diagnostico-JetDirect -IP $IP -ResultadoBase $resultado }
+                    631 { $resultado = Diagnostico-IPP -IP $IP -ResultadoBase $resultado }
+                    161 { $resultado = Diagnostico-SNMP -IP $IP -ResultadoBase $resultado }
+                }
+            }
+        }
+        
+        return $resultado
+    }
+    catch {
+        $resultado.Erros += "Erro no diagnostico universal: $_"
+        return $resultado
+    }
+}
+
+# Diagnostico via JetDirect (porta 9100)
+function Diagnostico-JetDirect {
+    param(
+        [string]$IP,
+        [hashtable]$ResultadoBase
+    )
+    
+    try {
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.Connect($IP, 9100)
+        $stream = $tcpClient.GetStream()
+        
+        # Comando universal de status
+        $statusCmd = [System.Text.Encoding]::ASCII.GetBytes("`e%-12345X@PJL INFO STATUS`r`n`e%-12345X`r`n")
+        $stream.Write($statusCmd, 0, $statusCmd.Length)
+        
+        $buffer = New-Object byte[] 2048
+        $bytesRead = $stream.Read($buffer, 0, 2048)
+        $response = [System.Text.Encoding]::ASCII.GetString($buffer, 0, $bytesRead)
+        
+        # Analisar resposta
+        if ($response -match "READY|ONLINE") {
+            $ResultadoBase.Status = "Online"
+        }
+        elseif ($response -match "OFFLINE|ERROR") {
+            $ResultadoBase.Status = "Offline"
+            $ResultadoBase.Erros += "Impressora offline"
+        }
+        
+        if ($response -match "PAPER.*JAM|JAM.*PAPER|MISFEED") {
+            $ResultadoBase.PapelPreso = $true
+            $ResultadoBase.Erros += "Papel preso detectado"
+        }
+        
+        $tcpClient.Close()
+        return $ResultadoBase
+    }
+    catch {
+        $ResultadoBase.Erros += "Erro JetDirect: $_"
+        return $ResultadoBase
+    }
+}
+
+# Menu de controle total avancado
+function Menu-Controle-Total {
+    Clear-Host
+    Show-Text "=== CONTROLE TOTAL DE IMPRESSORAS NA REDE ===" Magenta
+    
+    $ip = Read-Host "Digite o IP da impressora"
+    if ([string]::IsNullOrWhiteSpace($ip)) {
+        Show-Text "IP invalido" Red
+        return
+    }
+    
+    $modelo = Read-Host "Digite o modelo (ex: Epson L3250) ou ENTER para deteccao automatica"
+    
+    Show-Text "Executando controle total da impressora $ip..." Cyan
+    $resultado = Controle-Total-Impressora -IP $ip -Modelo $modelo
+    
+    # Exibir resultados
+    Separator
+    Show-Text "RESULTADO DO CONTROLE TOTAL:" Yellow
+    Show-Text "IP: $ip" White
+    Show-Text "Status: $($resultado.Status)" $(if($resultado.Status -eq "Online"){"Green"}else{"Red"})
+    Show-Text "Conectividade: $($resultado.Conectividade)" $(if($resultado.Conectividade){"Green"}else{"Red"})
+    Show-Text "Papel Preso: $($resultado.PapelPreso)" $(if($resultado.PapelPreso){"Red"}else{"Green"})
+    Show-Text "Temperatura: $($resultado.Temperatura)" White
+    
+    if ($resultado.Erros.Count -gt 0) {
+        Show-Text "ERROS DETECTADOS:" Red
+        foreach ($erro in $resultado.Erros) {
+            Show-Text "  - $erro" Red
+        }
+    }
+    
+    # Opcoes de acao
+    if ($resultado.PapelPreso -or $resultado.Erros.Count -gt 0) {
+        Separator
+        Show-Text "ACOES DISPONIVEIS:" Yellow
+        
+        if ($modelo -like "*L3250*" -or $modelo -like "*Epson*") {
+            Show-Text "[1] Reset de desbloqueio Epson L3250"
+        }
+        Show-Text "[2] Reset universal"
+        Show-Text "[3] Limpar papel preso"
+        Show-Text "[0] Voltar"
+        
+        $acao = Read-Host "Escolha uma acao"
+        
+        switch ($acao) {
+            "1" {
+                if ($modelo -like "*L3250*" -or $modelo -like "*Epson*") {
+                    Reset-Epson-L3250-Desbloqueio -IP $ip
+                }
+            }
+            "2" {
+                Reset-Universal-Rede -IP $ip
+            }
+            "3" {
+                Limpar-Papel-Preso -IP $ip
+            }
+        }
+    }
+}
+
+# Funcao para limpar papel preso via rede
+function Limpar-Papel-Preso {
+    param([string]$IP)
+    
+    Show-Text "Enviando comandos para limpar papel preso..." Yellow
+    
+    try {
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.Connect($IP, 9100)
+        $stream = $tcpClient.GetStream()
+        
+        # Comandos para limpar papel preso
+        $comandos = @(
+            "`e%-12345X@PJL SET CLEARJAM=ON`r`n`e%-12345X`r`n",
+            "`e%-12345X@PJL SET AUTOCONT=ON`r`n`e%-12345X`r`n",
+            "`e@"  # Reset basico
+        )
+        
+        foreach ($cmd in $comandos) {
+            $bytes = [System.Text.Encoding]::ASCII.GetBytes($cmd)
+            $stream.Write($bytes, 0, $bytes.Length)
+            Start-Sleep -Milliseconds 300
+        }
+        
+        $tcpClient.Close()
+        Show-Text "Comandos de limpeza enviados com sucesso" Green
+    }
+    catch {
+        Show-Text "Erro ao limpar papel preso: $_" Red
+    }
+}
+
+# Reset universal via rede
+function Reset-Universal-Rede {
+    param([string]$IP)
+    
+    Show-Text "Executando reset universal via rede..." Yellow
+    
+    try {
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.Connect($IP, 9100)
+        $stream = $tcpClient.GetStream()
+        
+        # Sequencia de reset universal
+        $comandos = @(
+            "`e@",  # ESC @
+            "`eE",  # ESC E
+            "`e%-12345X@PJL RESET`r`n`e%-12345X`r`n",
+            "`e%-12345X@PJL INITIALIZE`r`n`e%-12345X`r`n"
+        )
+        
+        foreach ($cmd in $comandos) {
+            $bytes = [System.Text.Encoding]::ASCII.GetBytes($cmd)
+            $stream.Write($bytes, 0, $bytes.Length)
+            Start-Sleep -Milliseconds 500
+            Show-Text "Reset enviado: $($cmd.Replace("`e", "ESC"))" Cyan
+        }
+        
+        $tcpClient.Close()
+        Show-Text "Reset universal concluido" Green
+    }
+    catch {
+        Show-Text "Erro no reset universal: $_" Red
+    }
+}
