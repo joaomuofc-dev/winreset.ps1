@@ -8,6 +8,86 @@
 # Funciona: 100% PowerShell nativo, sem dependencias externas
 # ===============================================================================
 
+# Sistema de segurança e auditoria
+function Sistema-Seguranca {
+    param(
+        [string]$Acao,
+        [string]$IP,
+        [string]$Usuario = $env:USERNAME
+    )
+    
+    $logSeguranca = "$env:USERPROFILE\WinReset_Security_$(Get-Date -Format 'yyyyMM').log"
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    
+    # Verificar permissões
+    if (-not (Verificar-Permissoes -Acao $Acao)) {
+        $entrada = "[$timestamp] [NEGADO] Usuário: $Usuario | Ação: $Acao | IP: $IP | Motivo: Sem permissão"
+        Add-Content -Path $logSeguranca -Value $entrada
+        Show-Text "❌ Acesso negado para a ação: $Acao" Red
+        return $false
+    }
+    
+    # Log da ação autorizada
+    $entrada = "[$timestamp] [AUTORIZADO] Usuário: $Usuario | Ação: $Acao | IP: $IP"
+    Add-Content -Path $logSeguranca -Value $entrada
+    
+    # Verificar se é ação crítica
+    $acoesCriticas = @("Reset-Total", "Formatacao", "Configuracao-Rede")
+    if ($Acao -in $acoesCriticas) {
+        Show-Text "⚠️  AÇÃO CRÍTICA DETECTADA: $Acao" Yellow
+        if (-not (Confirmar-AcaoCritica -Acao $Acao -IP $IP)) {
+            $entrada = "[$timestamp] [CANCELADO] Usuário: $Usuario | Ação: $Acao | IP: $IP | Motivo: Cancelado pelo usuário"
+            Add-Content -Path $logSeguranca -Value $entrada
+            return $false
+        }
+    }
+    
+    return $true
+}
+
+# Verificação de permissões
+function Verificar-Permissoes {
+    param([string]$Acao)
+    
+    # Verificar se é administrador
+    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+    
+    $acoesAdminObrigatorio = @("Reset-Total", "Configuracao-Sistema", "Backup-Restauracao")
+    
+    if ($Acao -in $acoesAdminObrigatorio -and -not $isAdmin) {
+        return $false
+    }
+    
+    return $true
+}
+
+# Confirmação para ações críticas
+function Confirmar-AcaoCritica {
+    param(
+        [string]$Acao,
+        [string]$IP
+    )
+    
+    Show-Text "🔐 CONFIRMAÇÃO DE SEGURANÇA" Red
+    Show-Text "Ação: $Acao" Yellow
+    Show-Text "Alvo: $IP" Yellow
+    Show-Text "Esta é uma ação irreversível que pode afetar o funcionamento da impressora." Red
+    
+    $codigo = Get-Random -Minimum 1000 -Maximum 9999
+    Show-Text "Digite o código de confirmação: $codigo" Cyan
+    
+    $entrada = Read-Host "Código"
+    
+    if ($entrada -eq $codigo.ToString()) {
+        Show-Text "✅ Confirmação aceita" Green
+        return $true
+    }
+    else {
+        Show-Text "❌ Código incorreto. Ação cancelada." Red
+        return $false
+    }
+}
+
 [Console]::Title = "WinReset v3.0 - Reset Universal de Impressoras"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -886,4 +966,419 @@ function Reset-Universal-Rede {
     catch {
         Show-Text "Erro no reset universal: $_" Red
     }
+}
+
+# 🚀 Melhorias Avançadas para WinReset v3.0
+
+# Sistema de automação inteligente
+function Automacao-Inteligente {
+    param(
+        [array]$ImpressorasMonitoradas,
+        [switch]$ModoAutomatico
+    )
+    
+    Show-Text "🤖 Iniciando sistema de automação inteligente..." Magenta
+    
+    $regrasAutomacao = @(
+        @{
+            Nome = "Auto-Reset Papel Preso"
+            Condicao = { param($status) $status.PapelPreso }
+            Acao = { param($ip) Reset-PapelPreso-Automatico -IP $ip }
+            Ativo = $true
+        },
+        @{
+            Nome = "Notificação Tinta Baixa"
+            Condicao = { param($status) $status.TintaBaixa }
+            Acao = { param($ip) Notificar-TintaBaixa -IP $ip }
+            Ativo = $true
+        },
+        @{
+            Nome = "Reconexão Automática"
+            Condicao = { param($status) $status.Status -eq "Offline" }
+            Acao = { param($ip) Tentar-Reconexao -IP $ip }
+            Ativo = $true
+        }
+    )
+    
+    while ($true) {
+        foreach ($impressora in $ImpressorasMonitoradas) {
+            $status = Monitorar-StatusRapido -IP $impressora.IP
+            
+            foreach ($regra in $regrasAutomacao) {
+                if ($regra.Ativo -and (& $regra.Condicao $status)) {
+                    Show-Text "🔧 Executando automação: $($regra.Nome) para $($impressora.IP)" Yellow
+                    
+                    if ($ModoAutomatico -or (Confirmar-Automacao -Regra $regra.Nome -IP $impressora.IP)) {
+                        & $regra.Acao $impressora.IP
+                        
+                        # Log da automação
+                        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                        $logEntry = "[$timestamp] [AUTOMACAO] $($regra.Nome) executada em $($impressora.IP)"
+                        Add-Content -Path $global:logFile -Value $logEntry
+                    }
+                }
+            }
+        }
+        
+        Start-Sleep -Seconds 30  # Verificar a cada 30 segundos
+        
+        # Verificar se deve parar
+        if ([Console]::KeyAvailable) {
+            $key = [Console]::ReadKey($true)
+            if ($key.KeyChar -eq 'q' -or $key.KeyChar -eq 'Q') {
+                Show-Text "Automação interrompida pelo usuário" Yellow
+                break
+            }
+        }
+    }
+}
+
+# Reset automático de papel preso
+function Reset-PapelPreso-Automatico {
+    param([string]$IP)
+    
+    Show-Text "🔧 Executando reset automático de papel preso em $IP..." Cyan
+    
+    try {
+        $tcpClient = New-Object System.Net.Sockets.TcpClient
+        $tcpClient.Connect($IP, 9100)
+        $stream = $tcpClient.GetStream()
+        
+        # Sequência específica para papel preso
+        $comandos = @(
+            "`e%-12345X@PJL SET CLEARJAM=ON`r`n`e%-12345X`r`n",
+            "`e%-12345X@PJL SET AUTOCONT=ON`r`n`e%-12345X`r`n",
+            "`e@",  # Reset básico
+            "`e%-12345X@PJL RESET`r`n`e%-12345X`r`n"
+        )
+        
+        foreach ($cmd in $comandos) {
+            $bytes = [System.Text.Encoding]::ASCII.GetBytes($cmd)
+            $stream.Write($bytes, 0, $bytes.Length)
+            Start-Sleep -Milliseconds 500
+        }
+        
+        $tcpClient.Close()
+        Show-Text "✅ Reset automático de papel preso concluído" Green
+        
+        # Verificar se resolveu
+        Start-Sleep -Seconds 5
+        $novoStatus = Monitorar-StatusRapido -IP $IP
+        if (-not $novoStatus.PapelPreso) {
+            Show-Text "🎉 Problema de papel preso resolvido automaticamente!" Green
+        }
+        else {
+            Show-Text "⚠️  Problema persiste. Intervenção manual necessária." Yellow
+        }
+    }
+    catch {
+        Show-Text "❌ Erro no reset automático: $_" Red
+    }
+}
+
+# Confirmação para automação
+function Confirmar-Automacao {
+    param(
+        [string]$Regra,
+        [string]$IP
+    )
+    
+    Show-Text "🤖 Automação detectada: $Regra" Yellow
+    Show-Text "Alvo: $IP" Yellow
+    $resposta = Read-Host "Executar automaticamente? (S/N)"
+    
+    return ($resposta -eq 'S' -or $resposta -eq 's' -or $resposta -eq 'Y' -or $resposta -eq 'y')
+}
+
+# 🤖 1. Sistema de IA para Detecção Automática
+function IA-DeteccaoInteligente {
+    param(
+        [string]$NetworkRange = "192.168.1",
+        [switch]$ScanCompleto
+    )
+    
+    Show-Text "🤖 Iniciando detecção inteligente com IA..." Magenta
+    
+    $impressorasDetectadas = @()
+    $padroesMarcas = @{
+        "Epson" = @("EPSON", "L3250", "L3150", "WF-", "XP-")
+        "HP" = @("HP", "LaserJet", "DeskJet", "OfficeJet", "Envy")
+        "Canon" = @("Canon", "PIXMA", "imageCLASS", "MAXIFY")
+        "Brother" = @("Brother", "DCP-", "MFC-", "HL-")
+        "Zebra" = @("Zebra", "ZPL", "EPL", "GK420")
+    }
+    
+    # Scan inteligente da rede
+    $ips = 1..254 | ForEach-Object { "$NetworkRange.$_" }
+    
+    $ips | ForEach-Object -Parallel {
+        $ip = $_
+        $resultado = @{
+            IP = $ip
+            Marca = "Desconhecida"
+            Modelo = "Desconhecido"
+            Portas = @()
+            Servicos = @()
+            Confianca = 0
+        }
+        
+        # Teste de conectividade em múltiplas portas
+        $portasComuns = @(9100, 515, 631, 161, 80, 443, 21, 23)
+        foreach ($porta in $portasComuns) {
+            $teste = Test-NetConnection -ComputerName $ip -Port $porta -WarningAction SilentlyContinue -InformationLevel Quiet
+            if ($teste) {
+                $resultado.Portas += $porta
+                $resultado.Confianca += 10
+                
+                # Identificação por porta
+                switch ($porta) {
+                    9100 { $resultado.Servicos += "JetDirect" }
+                    515 { $resultado.Servicos += "LPD" }
+                    631 { $resultado.Servicos += "IPP" }
+                    161 { $resultado.Servicos += "SNMP" }
+                    80 { $resultado.Servicos += "HTTP" }
+                    443 { $resultado.Servicos += "HTTPS" }
+                }
+            }
+        }
+        
+        # Se encontrou serviços de impressora, fazer identificação avançada
+        if ($resultado.Portas.Count -gt 0) {
+            $resultado = IA-IdentificarMarca -IP $ip -ResultadoBase $resultado -PadroesMarcas $padroesMarcas
+        }
+        
+        return $resultado
+    } -ThrottleLimit 50 | Where-Object { $_.Portas.Count -gt 0 } | Sort-Object Confianca -Descending
+    
+    return $impressorasDetectadas
+}
+
+# IA para identificação de marca e modelo
+function IA-IdentificarMarca {
+    param(
+        [string]$IP,
+        [hashtable]$ResultadoBase,
+        [hashtable]$PadroesMarcas
+    )
+    
+    try {
+        # Tentar identificação via HTTP/HTTPS
+        if (80 -in $ResultadoBase.Portas -or 443 -in $ResultadoBase.Portas) {
+            $protocolo = if (443 -in $ResultadoBase.Portas) { "https" } else { "http" }
+            try {
+                $response = Invoke-WebRequest -Uri "$protocolo://$IP" -TimeoutSec 3 -ErrorAction SilentlyContinue
+                $html = $response.Content
+                
+                foreach ($marca in $PadroesMarcas.Keys) {
+                    foreach ($padrao in $PadroesMarcas[$marca]) {
+                        if ($html -match $padrao) {
+                            $ResultadoBase.Marca = $marca
+                            $ResultadoBase.Confianca += 30
+                            
+                            # Tentar extrair modelo
+                            if ($html -match "($padrao[\w\-]+)") {
+                                $ResultadoBase.Modelo = $matches[1]
+                                $ResultadoBase.Confianca += 20
+                            }
+                            break
+                        }
+                    }
+                    if ($ResultadoBase.Marca -ne "Desconhecida") { break }
+                }
+            }
+            catch { }
+        }
+        
+        # Tentar identificação via JetDirect
+        if (9100 -in $ResultadoBase.Portas -and $ResultadoBase.Marca -eq "Desconhecida") {
+            try {
+                $tcpClient = New-Object System.Net.Sockets.TcpClient
+                $tcpClient.ReceiveTimeout = 3000
+                $tcpClient.Connect($IP, 9100)
+                $stream = $tcpClient.GetStream()
+                
+                # Comando para obter informações
+                $infoCmd = [System.Text.Encoding]::ASCII.GetBytes("`e%-12345X@PJL INFO ID`r`n`e%-12345X`r`n")
+                $stream.Write($infoCmd, 0, $infoCmd.Length)
+                
+                $buffer = New-Object byte[] 1024
+                $bytesRead = $stream.Read($buffer, 0, 1024)
+                $response = [System.Text.Encoding]::ASCII.GetString($buffer, 0, $bytesRead)
+                
+                foreach ($marca in $PadroesMarcas.Keys) {
+                    foreach ($padrao in $PadroesMarcas[$marca]) {
+                        if ($response -match $padrao) {
+                            $ResultadoBase.Marca = $marca
+                            $ResultadoBase.Confianca += 25
+                            
+                            if ($response -match "($padrao[\w\-]+)") {
+                                $ResultadoBase.Modelo = $matches[1]
+                                $ResultadoBase.Confianca += 15
+                            }
+                            break
+                        }
+                    }
+                    if ($ResultadoBase.Marca -ne "Desconhecida") { break }
+                }
+                
+                $tcpClient.Close()
+            }
+            catch { }
+        }
+        
+        return $ResultadoBase
+    }
+    catch {
+        return $ResultadoBase
+    }
+}
+
+# Dashboard interativo em tempo real
+function Dashboard-TempoReal {
+    param([array]$ImpressorasMonitoradas)
+    
+    $posicaoOriginal = $Host.UI.RawUI.CursorPosition
+    
+    while ($true) {
+        $Host.UI.RawUI.CursorPosition = $posicaoOriginal
+        Clear-Host
+        
+        # Cabeçalho do dashboard
+        Show-Text "╔══════════════════════════════════════════════════════════════════════════════╗" Cyan
+        Show-Text "║                    🖨️  WINRESET DASHBOARD TEMPO REAL v3.0                    ║" Cyan
+        Show-Text "╠══════════════════════════════════════════════════════════════════════════════╣" Cyan
+        Show-Text "║ Atualização: $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss') | Pressione 'Q' para sair          ║" Yellow
+        Show-Text "╚══════════════════════════════════════════════════════════════════════════════╝" Cyan
+        
+        # Status geral
+        $totalImpressoras = $ImpressorasMonitoradas.Count
+        $online = 0
+        $comProblemas = 0
+        $offline = 0
+        
+        foreach ($impressora in $ImpressorasMonitoradas) {
+            $status = Monitorar-StatusRapido -IP $impressora.IP
+            switch ($status.Status) {
+                "Online" { $online++ }
+                "Problema" { $comProblemas++ }
+                "Offline" { $offline++ }
+            }
+        }
+        
+        # Exibir estatísticas
+        Show-Text "`n📊 ESTATÍSTICAS GERAIS:" Magenta
+        Show-Text "   Total de Impressoras: $totalImpressoras" White
+        Show-Text "   🟢 Online: $online" Green
+        Show-Text "   🟡 Com Problemas: $comProblemas" Yellow
+        Show-Text "   🔴 Offline: $offline" Red
+        
+        # Lista detalhada
+        Show-Text "`n🖨️  STATUS DETALHADO:" Magenta
+        Show-Text "┌─────────────────┬──────────────┬─────────────┬──────────────────────────────┐" Gray
+        Show-Text "│ IP              │ Marca        │ Status      │ Último Problema              │" Gray
+        Show-Text "├─────────────────┼──────────────┼─────────────┼──────────────────────────────┤" Gray
+        
+        foreach ($impressora in $ImpressorasMonitoradas) {
+            $status = Monitorar-StatusRapido -IP $impressora.IP
+            $cor = switch ($status.Status) {
+                "Online" { "Green" }
+                "Problema" { "Yellow" }
+                "Offline" { "Red" }
+                default { "Gray" }
+            }
+            
+            $ip = $impressora.IP.PadRight(15)
+            $marca = $impressora.Marca.PadRight(12)
+            $statusText = $status.Status.PadRight(11)
+            $problema = ($status.UltimoProblema -replace ".{30}.*", "...").PadRight(28)
+            
+            Show-Text "│ $ip │ $marca │ $statusText │ $problema │" $cor
+        }
+        
+        Show-Text "└─────────────────┴──────────────┴─────────────┴──────────────────────────────┘" Gray
+        
+        # Alertas críticos
+        $alertasCriticos = $ImpressorasMonitoradas | Where-Object { 
+            $status = Monitorar-StatusRapido -IP $_.IP
+            $status.PapelPreso -or $status.TintaBaixa -or $status.Status -eq "Offline"
+        }
+        
+        if ($alertasCriticos.Count -gt 0) {
+            Show-Text "`n🚨 ALERTAS CRÍTICOS:" Red
+            foreach ($alerta in $alertasCriticos) {
+                $status = Monitorar-StatusRapido -IP $alerta.IP
+                if ($status.PapelPreso) {
+                    Show-Text "   📄 Papel preso em $($alerta.IP) ($($alerta.Marca))" Red
+                }
+                if ($status.TintaBaixa) {
+                    Show-Text "   🖋️  Tinta baixa em $($alerta.IP) ($($alerta.Marca))" Yellow
+                }
+                if ($status.Status -eq "Offline") {
+                    Show-Text "   🔌 Impressora offline: $($alerta.IP) ($($alerta.Marca))" Red
+                }
+            }
+        }
+        
+        # Verificar se usuário quer sair
+        if ([Console]::KeyAvailable) {
+            $key = [Console]::ReadKey($true)
+            if ($key.KeyChar -eq 'q' -or $key.KeyChar -eq 'Q') {
+                break
+            }
+        }
+        
+        Start-Sleep -Seconds 5
+    }
+}
+
+# Monitoramento rápido de status
+function Monitorar-StatusRapido {
+    param([string]$IP)
+    
+    $resultado = @{
+        Status = "Offline"
+        PapelPreso = $false
+        TintaBaixa = $false
+        UltimoProblema = "Nenhum"
+        Timestamp = Get-Date
+    }
+    
+    try {
+        $ping = Test-NetConnection -ComputerName $IP -Port 9100 -WarningAction SilentlyContinue -InformationLevel Quiet
+        if ($ping) {
+            $resultado.Status = "Online"
+            
+            # Verificação rápida de problemas
+            $tcpClient = New-Object System.Net.Sockets.TcpClient
+            $tcpClient.ReceiveTimeout = 2000
+            $tcpClient.Connect($IP, 9100)
+            $stream = $tcpClient.GetStream()
+            
+            $statusCmd = [System.Text.Encoding]::ASCII.GetBytes("`e%-12345X@PJL INFO STATUS`r`n`e%-12345X`r`n")
+            $stream.Write($statusCmd, 0, $statusCmd.Length)
+            
+            $buffer = New-Object byte[] 512
+            $bytesRead = $stream.Read($buffer, 0, 512)
+            $response = [System.Text.Encoding]::ASCII.GetString($buffer, 0, $bytesRead)
+            
+            if ($response -match "JAM|PAPER.*STUCK") {
+                $resultado.PapelPreso = $true
+                $resultado.Status = "Problema"
+                $resultado.UltimoProblema = "Papel preso"
+            }
+            
+            if ($response -match "INK.*LOW|TONER.*LOW") {
+                $resultado.TintaBaixa = $true
+                $resultado.Status = "Problema"
+                $resultado.UltimoProblema = "Tinta/Toner baixo"
+            }
+            
+            $tcpClient.Close()
+        }
+    }
+    catch {
+        $resultado.UltimoProblema = "Erro de comunicação"
+    }
+    
+    return $resultado
 }
