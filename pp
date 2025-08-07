@@ -608,7 +608,8 @@ function Reset-ImpressoraUniversal {
         return $false
     }
     
-    Show-Text "🔄 Executando $ResetType para $brand ($($PrinterInfo.Name ?? $PrinterInfo.IP))..." "Yellow"
+    $displayName = if ($PrinterInfo.Name) { $PrinterInfo.Name } else { $PrinterInfo.IP }
+        Show-Text "🔄 Executando $ResetType para $brand ($displayName)..." "Yellow"
     
     $success = $false
     foreach ($command in $commands) {
@@ -667,7 +668,8 @@ function Diagnosticar-ImpressoraUniversal {
         [hashtable]$PrinterInfo
     )
     
-    Show-Text "🔍 Diagnóstico completo: $($PrinterInfo.Name ?? $PrinterInfo.IP)" "Cyan"
+    $displayName = if ($PrinterInfo.Name) { $PrinterInfo.Name } else { $PrinterInfo.IP }
+        Show-Text "🔍 Diagnóstico completo: $displayName" "Cyan"
     Separator
     
     $diagnostico = @{
@@ -1364,7 +1366,7 @@ function Menu-ResetUniversal {
     Show-Text "📋 Impressoras detectadas:"
     for ($i = 0; $i -lt $Global:DetectedPrinters.Count; $i++) {
         $printer = $Global:DetectedPrinters[$i]
-        $name = $printer.Name ?? $printer.IP
+        $name = if ($printer.Name) { $printer.Name } else { $printer.IP }
         $type = $printer.Type
         $brand = $printer.Brand
         Show-Text "[$i] $name ($type - $brand)" Cyan
@@ -1392,7 +1394,8 @@ function Menu-ResetUniversal {
         $selectedPrinter = $Global:DetectedPrinters[[int]$choice]
         
         Clear-Host
-        Show-Text "🎯 Reset: $($selectedPrinter.Name ?? $selectedPrinter.IP)" Yellow
+        $displayName = if ($selectedPrinter.Name) { $selectedPrinter.Name } else { $selectedPrinter.IP }
+        Show-Text "🎯 Reset: $displayName" "Yellow"
         Show-Text "Marca: $($selectedPrinter.Brand)" Cyan
         Show-Text "Tipo: $($selectedPrinter.Type)" Cyan
         
@@ -1428,7 +1431,7 @@ function Menu-DiagnosticoUniversal {
     Show-Text "📋 Impressoras detectadas:"
     for ($i = 0; $i -lt $Global:DetectedPrinters.Count; $i++) {
         $printer = $Global:DetectedPrinters[$i]
-        $name = $printer.Name ?? $printer.IP
+        $name = if ($printer.Name) { $printer.Name } else { $printer.IP }
         $type = $printer.Type
         $brand = $printer.Brand
         Show-Text "[$i] $name ($type - $brand)" Cyan
